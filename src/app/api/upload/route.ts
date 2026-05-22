@@ -7,16 +7,24 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const file = formData.get('file') as File;
+    const file = formData.get('file');
+
+    // Robust safety check: verify file is present and is a valid upload object
+    if (!file || typeof file === 'string' || !(file instanceof Blob || (file && typeof (file as any).arrayBuffer === 'function'))) {
+      return NextResponse.json({ error: 'No valid file provided' }, { status: 400 });
+    }
+
     const categoryId = formData.get('categoryId') as string;
     const userName = formData.get('userName') as string || 'Anonymous';
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
+    // Safely extract the filename, size, and convert the arrayBuffer to a Node Buffer
+    const fileName = (file as any).name || `upload_${Date.now()}`;
+    const fileSize = (file as any).size || 0;
+    
+    const arrayBuffer = await (file as any).arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const megaUrl = await uploadToMega(buffer, file.name);
+    const megaUrl = await uploadToMega(buffer, fileName);
 
     let finalCategoryId: string | null = null;
     let finalCategoryName = 'Notes';
@@ -56,8 +64,8 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from('files')
       .insert({
-        name: file.name,
-        size: file.size,
+        name: fileName,
+        size: fileSize,
         category_id: finalCategoryId,
         category_name: finalCategoryName,
         mega_url: megaUrl,

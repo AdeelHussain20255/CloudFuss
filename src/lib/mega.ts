@@ -25,10 +25,11 @@ export async function uploadToMega(
     });
   });
 
+  // Pass fileBuffer as the second argument to fix the TypeError crash in Vercel
   const stream = client.upload({
     name: fileName,
     size: fileBuffer.length,
-  });
+  }, fileBuffer);
 
   const uploadedFile = await stream.complete;
   const link = await uploadedFile.link({});
