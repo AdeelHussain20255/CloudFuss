@@ -18,14 +18,39 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const megaUrl = await uploadToMega(buffer, file.name);
 
-    let categoryName = categoryId;
+    let finalCategoryId: string | null = null;
+    let finalCategoryName = 'Notes';
+
     if (categoryId && categoryId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      finalCategoryId = categoryId;
       const { data: cat } = await supabase
         .from('categories')
         .select('name')
         .eq('id', categoryId)
         .single();
-      if (cat) categoryName = cat.name;
+      if (cat) finalCategoryName = cat.name;
+    } else {
+      const searchName = (categoryId && categoryId !== 'all') ? categoryId : 'Notes';
+      
+      // Attempt friendly conversions
+      let resolvedName = searchName;
+      if (searchName.toLowerCase() === 'pastpapers') resolvedName = 'Past Papers';
+      else if (searchName.toLowerCase() === 'csstuff') resolvedName = 'CS Stuff';
+      else if (searchName.toLowerCase() === 'certificates') resolvedName = 'Certificates';
+      else if (searchName.toLowerCase() === 'notes') resolvedName = 'Notes';
+
+      const { data: cat } = await supabase
+        .from('categories')
+        .select('id, name')
+        .ilike('name', resolvedName)
+        .single();
+
+      if (cat) {
+        finalCategoryId = cat.id;
+        finalCategoryName = cat.name;
+      } else {
+        finalCategoryName = resolvedName;
+      }
     }
 
     const { data, error } = await supabase
@@ -33,8 +58,8 @@ export async function POST(request: NextRequest) {
       .insert({
         name: file.name,
         size: file.size,
-        category_id: categoryId?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) ? categoryId : null,
-        category_name: categoryName,
+        category_id: finalCategoryId,
+        category_name: finalCategoryName,
         mega_url: megaUrl,
         user_name: userName,
       })
